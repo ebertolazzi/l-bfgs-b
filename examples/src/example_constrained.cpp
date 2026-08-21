@@ -2,7 +2,7 @@
 // Distributed under the terms of the MIT License
 
 #include <iostream>
-#include "lbfgsb.h"
+#include "lbfgsb.hh"
 #include "example.h"
 
 using namespace optimize;

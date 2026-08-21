@@ -6,7 +6,7 @@
 
 #include <cmath>
 
-#include "function.h"
+#include "lbfgsb.hh"
 
 namespace optimize
 {

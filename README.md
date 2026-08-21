@@ -61,7 +61,7 @@ First we need to define our objective function. This must be a class inheriting 
 
 ```cpp
 #include <iostream>
-#include "lbfgsb.h"
+#include "lbfgsb.hh"
 
 using namespace optimize;
 

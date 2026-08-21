@@ -4,7 +4,7 @@
 #ifndef EXAMPLE_H
 #define EXAMPLE_H
 
-#include "function.h"
+#include "lbfgsb.hh"
 
 namespace optimize
 {

@@ -4,7 +4,7 @@
 #include "gtest/gtest.h"
 
 #include "test.h"
-#include "lbfgsb.h"
+#include "lbfgsb.hh"
 
 using namespace optimize;
 using LewisOvertonWeak = LewisOverton<Wolfe::weak>;
@@ -26,6 +26,37 @@ public:
 
 private:
   Vector target;
+};
+
+class OneDimQuadratic : public Function
+{
+public:
+  explicit OneDimQuadratic(const Scalar target) : target(target) {}
+
+  Scalar computeValue(const Vector& x) override
+  { return 0.5*(x(0) - target)*(x(0) - target); }
+
+  Vector computeGradient(const Vector& x) override
+  { return Vector {{ x(0) - target }}; }
+
+  Matrix computeHessian(const Vector& /*x*/) override
+  { return Matrix::Constant(1, 1, 1.0); }
+
+private:
+  Scalar target;
+};
+
+class ConcaveOneDim : public Function
+{
+public:
+  Scalar computeValue(const Vector& x) override
+  { return -x(0)*x(0); }
+
+  Vector computeGradient(const Vector& x) override
+  { return Vector {{ -2.0*x(0) }}; }
+
+  Matrix computeHessian(const Vector& /*x*/) override
+  { return Matrix::Constant(1, 1, -2.0); }
 };
 
 void minimizeSensitivityQuadratic(Lbfgsb<>& solver,
@@ -189,6 +220,85 @@ TEST(SolverSensitivity, GradientPMinimumWithBoundedSolution)
   const Vector g_p {{-7.0, 0.0, 2.5}};
   EXPECT_TRUE(solver.gradientPMinimum(g_p).isApprox(g_p));
 }
+
+TEST(Minimize1D, NewtonStepFindsInteriorMinimum)
+{
+  OneDimQuadratic function(3.0);
+  Minimize1D solver;
+  const State& state = solver.minimize(function, -2.0, -10.0, 10.0);
+  EXPECT_NEAR(state.x()(0), 3.0, MAX_ERROR);
+  EXPECT_NEAR(state.f(), 0.0, MAX_ERROR);
+  EXPECT_GT(state.hEvals(), 0);
+}
+
+TEST(Minimize1D, FindsBoundedMinimum)
+{
+  OneDimQuadratic function(-3.0);
+  Minimize1D solver;
+  const State& state = solver.minimize(function, 4.0, -1.0, 10.0);
+  EXPECT_NEAR(state.x()(0), -1.0, MAX_ERROR);
+  EXPECT_NEAR(state.f(), 2.0, MAX_ERROR);
+}
+
+TEST(Minimize1D, FallsBackFromNonPositiveCurvature)
+{
+  ConcaveOneDim function;
+  Minimize1D solver;
+  const State& state = solver.minimize(function, 0.5, -2.0, 2.0);
+  EXPECT_NEAR(std::abs(state.x()(0)), 2.0, MAX_ERROR);
+  EXPECT_NEAR(state.f(), -4.0, MAX_ERROR);
+}
+
+// Rosenbrock's banana-valley function in dimensions N=2,...,50.
+// Reference: H. H. Rosenbrock, "An Automatic Method for Finding the Greatest or
+// Least Value of a Function", The Computer Journal, 3(3), 175-184, 1960.
+// This scalable, narrow curved-valley problem is also part of the numerical testing
+// tradition documented by J. J. Moré, B. S. Garbow, K. E. Hillstrom, "Testing
+// Unconstrained Optimization Software", ACM TOMS, 7(1), 17-41, 1981.
+class RosenbrockDimensionsWeak : public ::testing::TestWithParam<Index> {};
+class RosenbrockDimensionsStrong : public ::testing::TestWithParam<Index> {};
+
+TEST_P(RosenbrockDimensionsWeak, ConvergesFromNarrowValley)
+{
+  const Index n = GetParam();
+  Rosenbrock function;
+  Lbfgsb<LewisOvertonWeak> solver;
+  solver.setAccuracy(0.8);
+  const State& state = solver.minimize(function,
+                                       Vector::Constant(n, 0.8),
+                                       Vector::Constant(n, -2.0),
+                                       Vector::Constant(n, 2.0)
+                                      );
+  EXPECT_NEAR(state.f(), 0.0, MAX_ERROR);
+}
+
+TEST_P(RosenbrockDimensionsStrong, ConvergesFromNarrowValley)
+{
+  const Index n = GetParam();
+  Rosenbrock function;
+  Lbfgsb<LewisOvertonStrong> solver;
+  solver.setAccuracy(0.8);
+  const State& state = solver.minimize(function,
+                                       Vector::Constant(n, 0.8),
+                                       Vector::Constant(n, -2.0),
+                                       Vector::Constant(n, 2.0)
+                                      );
+  EXPECT_NEAR(state.f(), 0.0, MAX_ERROR);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+  Dimensions2To50,
+  RosenbrockDimensionsWeak,
+  ::testing::Values<Index>(2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+                           15, 16, 17, 18, 19, 20, 25, 30, 35, 40, 45, 50)
+);
+
+INSTANTIATE_TEST_SUITE_P(
+  Dimensions2To50,
+  RosenbrockDimensionsStrong,
+  ::testing::Values<Index>(2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+                           15, 16, 17, 18, 19, 20, 25, 30, 35, 40, 45, 50)
+);
 
 #define LBFGSB_TEST_CASE(line_search, function, description, x, l, u, true_min)         \
   TEST(Lbfgsb##_##line_search, function##_##description) {                              \

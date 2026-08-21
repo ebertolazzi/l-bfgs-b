@@ -3,7 +3,7 @@
 
 #include <iostream>
 #include <iomanip>
-#include "lbfgsb.h"
+#include "lbfgsb.hh"
 #include "example.h"
 
 using namespace optimize;
