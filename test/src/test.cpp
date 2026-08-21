@@ -13,6 +13,183 @@ using LewisOvertonStrong = LewisOverton<Wolfe::strong>;
 constexpr Scalar MAX_ERROR = 1e-5;
 constexpr bool SHOW_RESULTS = false;
 
+class SensitivityQuadratic : public Function
+{
+public:
+  explicit SensitivityQuadratic(const Vector& target) : target(target) {}
+
+  Scalar computeValue(const Vector& x) override
+  { return 0.5*(x - target).squaredNorm(); }
+
+  Vector computeGradient(const Vector& x) override
+  { return x - target; }
+
+private:
+  Vector target;
+};
+
+void minimizeSensitivityQuadratic(Lbfgsb<>& solver,
+                                  const Vector& target,
+                                  const Vector& l,
+                                  const Vector& u
+                                 )
+{
+  SensitivityQuadratic function(target);
+  solver.minimize(function, Vector::Zero(target.size()), l, u);
+}
+
+TEST(SolverSensitivity, GradientPMinimizer)
+{
+  Lbfgsb<> solver;
+  Matrix g_xx(2, 2);
+  g_xx << 2.0, 0.0,
+          0.0, 4.0;
+  Matrix g_xp(2, 2);
+  g_xp << 2.0, -4.0,
+          8.0,  4.0;
+
+  Matrix expected(2, 2);
+  expected << -1.0,  2.0,
+              -2.0, -1.0;
+  EXPECT_TRUE(solver.gradientPMinimizer(g_xx, g_xp).isApprox(expected));
+
+  Simple function;
+  Lbfgsb<> solver_with_active;
+  solver_with_active.minimize(function,
+                              Vector {{ 9.0, -8.0 }},
+                              Vector {{-0.5, -10.0}},
+                              Vector {{10.0,  10.0}}
+                             );
+  Matrix expected_with_active(2, 2);
+  expected_with_active <<  0.0,  0.0,
+                          -2.0, -1.0;
+  EXPECT_TRUE(solver_with_active.gradientPMinimizer(g_xx, g_xp).isApprox(expected_with_active));
+}
+
+TEST(SolverSensitivity, GradientPMinimizerUpperBoundActive)
+{
+  Lbfgsb<> solver;
+  minimizeSensitivityQuadratic(solver,
+                               Vector {{ 5.0, 0.0 }},
+                               Vector {{-10.0, -10.0}},
+                               Vector {{ 1.0,  10.0}}
+                              );
+  Matrix g_xx(2, 2);
+  g_xx << 2.0, 0.0,
+          0.0, 4.0;
+  Matrix g_xp(2, 2);
+  g_xp << 2.0, -4.0,
+          8.0,  4.0;
+  Matrix expected(2, 2);
+  expected <<  0.0,  0.0,
+              -2.0, -1.0;
+  EXPECT_TRUE(solver.gradientPMinimizer(g_xx, g_xp).isApprox(expected));
+}
+
+TEST(SolverSensitivity, GradientPMinimizerAllBoundsActive)
+{
+  Lbfgsb<> solver;
+  minimizeSensitivityQuadratic(solver,
+                               Vector {{ 3.0, -4.0 }},
+                               Vector {{-1.0, -2.0}},
+                               Vector {{ 1.0,  2.0}}
+                              );
+  Matrix g_xx = Matrix::Identity(2, 2);
+  Matrix g_xp(2, 3);
+  g_xp << 1.0, 2.0, 3.0,
+          4.0, 5.0, 6.0;
+  EXPECT_TRUE(solver.gradientPMinimizer(g_xx, g_xp).isZero());
+}
+
+TEST(SolverSensitivity, GradientPMinimizerMultipleNonContiguousBounds)
+{
+  Lbfgsb<> solver;
+  minimizeSensitivityQuadratic(solver,
+                               Vector {{ 3.0, 0.0, -5.0, 0.0 }},
+                               Vector {{-1.0, -10.0, -2.0, -10.0}},
+                               Vector {{ 1.0,  10.0,  2.0,  10.0}}
+                              );
+  Matrix g_xx = Matrix::Zero(4, 4);
+  g_xx.diagonal() << 2.0, 3.0, 4.0, 5.0;
+  Matrix g_xp(4, 2);
+  g_xp << 1.0,  2.0,
+          6.0, -3.0,
+          4.0,  8.0,
+         10.0,  5.0;
+  Matrix expected(4, 2);
+  expected <<  0.0,  0.0,
+              -2.0,  1.0,
+               0.0,  0.0,
+              -2.0, -1.0;
+  EXPECT_TRUE(solver.gradientPMinimizer(g_xx, g_xp).isApprox(expected));
+}
+
+TEST(SolverSensitivity, GradientPMinimizerMixedLowerAndUpperBounds)
+{
+  Lbfgsb<> solver;
+  minimizeSensitivityQuadratic(solver,
+                               Vector {{-4.0, 0.0, 5.0}},
+                               Vector {{-1.0, -10.0, -10.0}},
+                               Vector {{10.0,  10.0,   2.0}}
+                              );
+  Matrix g_xx = Matrix::Identity(3, 3);
+  Matrix g_xp(3, 2);
+  g_xp << 1.0, 2.0,
+          3.0, 4.0,
+          5.0, 6.0;
+  Matrix expected(3, 2);
+  expected <<  0.0,  0.0,
+              -3.0, -4.0,
+               0.0,  0.0;
+  EXPECT_TRUE(solver.gradientPMinimizer(g_xx, g_xp).isApprox(expected));
+}
+
+TEST(SolverSensitivity, GradientPMinimizerDenseHessian)
+{
+  Lbfgsb<> solver;
+  Matrix g_xx(2, 2);
+  g_xx << 4.0, 1.0,
+          1.0, 3.0;
+  Matrix g_xp(2, 2);
+  g_xp << 5.0, 1.0,
+          2.0, 4.0;
+  Matrix expected(2, 2);
+  expected << -13.0/11.0,   1.0/11.0,
+               -3.0/11.0, -15.0/11.0;
+  EXPECT_TRUE(solver.gradientPMinimizer(g_xx, g_xp).isApprox(expected));
+}
+
+TEST(SolverSensitivity, GradientPMinimizerRejectsInvalidDimensions)
+{
+  Lbfgsb<> solver;
+  EXPECT_THROW(solver.gradientPMinimizer(Matrix::Identity(2, 2), Matrix::Zero(3, 1)), std::invalid_argument);
+}
+
+TEST(SolverSensitivity, GradientPMinimizerRejectsSingularFreeHessian)
+{
+  Lbfgsb<> solver;
+  EXPECT_THROW(solver.gradientPMinimizer(Matrix::Zero(2, 2), Matrix::Ones(2, 1)), std::runtime_error);
+}
+
+TEST(SolverSensitivity, GradientPMinimum)
+{
+  Lbfgsb<> solver;
+  const Vector g_p {{ 1.0, -2.0, 3.0 }};
+  EXPECT_TRUE(solver.gradientPMinimum(g_p).isApprox(g_p));
+}
+
+TEST(SolverSensitivity, GradientPMinimumWithBoundedSolution)
+{
+  Lbfgsb<> solver;
+  minimizeSensitivityQuadratic(solver,
+                               Vector {{ 3.0, -4.0 }},
+                               Vector {{-1.0, -2.0}},
+                               Vector {{ 1.0,  2.0}}
+                              );
+  const Vector g_p {{-7.0, 0.0, 2.5}};
+  EXPECT_TRUE(solver.gradientPMinimum(g_p).isApprox(g_p));
+}
+
 #define LBFGSB_TEST_CASE(line_search, function, description, x, l, u, true_min)         \
   TEST(Lbfgsb##_##line_search, function##_##description) {                              \
     function f;                                                                         \

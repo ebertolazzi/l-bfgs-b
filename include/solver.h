@@ -7,6 +7,9 @@
 #include <cmath>      // pow
 #include <iostream>   // cout, endl
 #include <functional> // function
+#include <stdexcept>  // invalid_argument, runtime_error
+
+#include <Eigen/LU>   // FullPivLU
 
 #include "function.h" // Function
 #include "util.h"     // State, StopState, Iterate, infinityNorm(), projectedGradient()
@@ -170,6 +173,83 @@ namespace optimize
     void setCallback(const Callback& callback)
     { this->callback = callback; }
 
+    // Computes the Jacobian dX*/dP of a locally optimal solution X*(P).
+    //
+    // At an unconstrained stationary point, differentiating g_X(X*(P), P) = 0 gives
+    //
+    //   g_XX dX*/dP = -g_XP,
+    //
+    // and therefore dX*/dP = -g_XX^-1 g_XP. The arguments must be evaluated at the
+    // computed optimum: g_xx has shape (n, n) and g_xp has shape (n, np), where np
+    // is the number of parameters. The returned matrix has shape (n, np).
+    //
+    // For parameter-independent box constraints, the active set is obtained from the
+    // solution and bounds stored by the last call to minimize(). Its sensitivities are
+    // set to zero and the system is solved only on the complementary free variables.
+    // This is valid locally only while the active set does not change. Bounds depending
+    // on P require their own derivative terms and are not handled by this method.
+    Matrix gradientPMinimizer(const Matrix& g_xx,
+                              const Matrix& g_xp
+                             ) const
+    {
+      if (g_xx.rows() != g_xx.cols() || g_xp.rows() != g_xx.rows()) {
+        throw std::invalid_argument("g_xx must be square and g_xp must have the same number of rows");
+      }
+
+      const Index n = g_xx.rows();
+      std::vector<bool> is_active(static_cast<size_t>(n), false);
+      for (const Index i : sensitivity_active_set) {
+        if (i < 0 || i >= n) {
+          throw std::invalid_argument("the stored active set is incompatible with g_xx");
+        }
+        is_active[static_cast<size_t>(i)] = true;
+      }
+
+      std::vector<Index> free_set;
+      free_set.reserve(static_cast<size_t>(n));
+      for (Index i = 0; i < n; ++i) {
+        if (!is_active[static_cast<size_t>(i)]) {
+          free_set.push_back(i);
+        }
+      }
+
+      Matrix gradient = Matrix::Zero(n, g_xp.cols());
+      if (free_set.empty()) {
+        return gradient;
+      }
+
+      const Index n_free = static_cast<Index>(free_set.size());
+      Matrix hessian_free(n_free, n_free);
+      Matrix mixed_free(n_free, g_xp.cols());
+      for (Index i = 0; i < n_free; ++i) {
+        mixed_free.row(i) = g_xp.row(free_set[static_cast<size_t>(i)]);
+        for (Index j = 0; j < n_free; ++j) {
+          hessian_free(i, j) = g_xx(free_set[static_cast<size_t>(i)], free_set[static_cast<size_t>(j)]);
+        }
+      }
+
+      Eigen::FullPivLU<Matrix> decomposition(hessian_free);
+      if (!decomposition.isInvertible()) {
+        throw std::runtime_error("the free-variable Hessian g_xx is singular");
+      }
+
+      const Matrix gradient_free = -decomposition.solve(mixed_free);
+      for (Index i = 0; i < n_free; ++i) {
+        gradient.row(free_set[static_cast<size_t>(i)]) = gradient_free.row(i);
+      }
+      return gradient;
+    }
+
+    // Computes the gradient d f_min/dP of the minimum value f_min(P) = g(X*(P), P).
+    //
+    // The envelope theorem gives d f_min/dP = g_P(X*(P), P): the derivative of X*(P)
+    // does not enter because the first-order optimality conditions cancel it. Thus g_p
+    // must be evaluated at the computed optimum and is returned unchanged. This result
+    // assumes differentiability and parameter-independent box constraints; if a bound
+    // depends on P, the corresponding KKT multiplier and bound derivative are needed.
+    Vector gradientPMinimum(const Vector& g_p) const
+    { return g_p; }
+
     // Returns the current state
     const State& state() const
     { return curr_state; }
@@ -223,6 +303,7 @@ namespace optimize
                                         );
       }
       curr_state.gNorm() = infinityNorm(projectedGradient(curr_state.x(), curr_state.g(), l, u));
+      updateSensitivityActiveSet();
 
       // Update duration only when timeout support is enabled.
 #ifdef LBFGSB_USE_TIMEOUT
@@ -262,6 +343,27 @@ namespace optimize
     }
 
   protected:
+    // Determines which variables are fixed at a bound in the current solution. This
+    // active set is intentionally independent from L-BFGS-B's Cauchy-point active set.
+    void updateSensitivityActiveSet()
+    {
+      sensitivity_active_set.clear();
+      const Scalar tolerance = 100*ScalarLimits::epsilon();
+      for (Index i = 0; i < n; ++i) {
+        const bool has_lower_bound = l(i) != ScalarLimits::lowest();
+        const bool has_upper_bound = u(i) != ScalarLimits::max();
+        const bool at_lower_bound = has_lower_bound
+                                  && std::abs(curr_state.x()(i) - l(i))
+                                     <= tolerance*std::max<Scalar>(1.0, std::abs(l(i)));
+        const bool at_upper_bound = has_upper_bound
+                                  && std::abs(curr_state.x()(i) - u(i))
+                                     <= tolerance*std::max<Scalar>(1.0, std::abs(u(i)));
+        if (at_lower_bound || at_upper_bound) {
+          sensitivity_active_set.push_back(i);
+        }
+      }
+    }
+
     static constexpr Scalar default_accuracy = 0.7;
 
     Index n;              // Size of x
@@ -269,6 +371,7 @@ namespace optimize
     Vector u;             // Upper bounds for x
     State curr_state;     // Current state
     State prev_state;     // Previous state
+    std::vector<Index> sensitivity_active_set; // Bound-active indices at the current solution
 #ifdef LBFGSB_USE_TIMEOUT
     Time end_time;        // Current time point
     Time start_time;      // Previous time point
