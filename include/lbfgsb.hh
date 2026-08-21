@@ -4,7 +4,6 @@
 // Copyright (c) 2023 Dane Roemer droemer7@gmail.com
 // Distributed under the terms of the MIT License
 
-
 #include <iostream>    // cout, endl, ostream
 #ifdef LBFGSB_USE_TIMEOUT
   #include <chrono>    // high_resolution_clock, duration
@@ -12,7 +11,50 @@
 #include <limits>      // numeric_limits
 #include <vector>      // vector
 
-#include <Eigen/Core>  // Eigen
+// -----------------------------------------------------------------------------
+// Eigen dependency
+//
+// If Eigen has already been included, EIGEN_MAJOR_VERSION is defined and
+// there is no need to include it again.
+//
+// Otherwise, try to locate Eigen/Core using the compiler's __has_include
+// facility. Eigen version 5 or newer is required.
+// -----------------------------------------------------------------------------
+
+#ifndef EIGEN_MAJOR_VERSION
+
+  // Check whether the compiler supports __has_include.
+  #if defined(__has_include)
+
+    // Try to include Eigen from the configured include search paths.
+    #if __has_include("Eigen/Core")
+      #include "Eigen/Core"
+      #include "Eigen/LU"   // FullPivLU
+    #elif __has_include(<Eigen/Core>)
+      #include <Eigen/Core>
+      #include <Eigen/LU>   // FullPivLU
+    #else
+      #error "Eigen not found. Eigen >= 5 is required."
+    #endif
+
+  #else
+
+    // __has_include is not available.
+    // Let the compiler perform the normal header lookup.
+    #include <Eigen/Core>
+    #include <Eigen/LU>   // FullPivLU
+
+  #endif
+
+#endif
+
+// Reject unsupported Eigen versions.
+#if EIGEN_MAJOR_VERSION < 5
+  #define STRINGIFY_IMPL(x) #x
+  #define STRINGIFY(x) STRINGIFY_IMPL(x)
+  #pragma message( "Eigen version: " STRINGIFY(EIGEN_MAJOR_VERSION) "." STRINGIFY(EIGEN_MINOR_VERSION) "." STRINGIFY(EIGEN_PATCH_VERSION) )
+  #error "Eigen >= 5 is required."
+#endif
 
 namespace optimize
 {
@@ -673,8 +715,6 @@ namespace optimize
 #include <functional> // function
 #include <stdexcept>  // invalid_argument, runtime_error
 
-#include <Eigen/LU>   // FullPivLU
-
 
 namespace optimize
 {
@@ -1105,9 +1145,6 @@ namespace optimize
 #include <cassert>          // assert
 #include <iostream>         // cout, endl, ostream
 #include <vector>           // vector
-
-#include <Eigen/LU>         // lu()
-
 
 namespace optimize
 {

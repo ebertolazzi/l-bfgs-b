@@ -33,11 +33,13 @@ endif()
 add_executable(${PROJECT_NAME}_constrained   src/example_constrained.cpp)
 add_executable(${PROJECT_NAME}_unconstrained src/example_unconstrained.cpp)
 add_executable(${PROJECT_NAME}_callback      src/example_callback.cpp)
+add_executable(${PROJECT_NAME}_benchmarks    src/example_benchmarks.cpp)
 
 foreach(_lbfgsb_target IN ITEMS
   ${PROJECT_NAME}_constrained
   ${PROJECT_NAME}_unconstrained
   ${PROJECT_NAME}_callback
+  ${PROJECT_NAME}_benchmarks
 )
   target_compile_options(${_lbfgsb_target} PRIVATE
     -Wall
