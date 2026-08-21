@@ -5,7 +5,9 @@
 #define UTIL_H
 
 #include <iostream>    // cout, endl, ostream
-#include <chrono>      // high_resolution_clock, system_clock, duration
+#ifdef LBFGSB_USE_TIMEOUT
+  #include <chrono>    // high_resolution_clock, duration
+#endif
 #include <limits>      // numeric_limits
 #include <vector>      // vector
 
@@ -22,9 +24,11 @@ namespace optimize
   using ScalarLimits = typename std::numeric_limits<Scalar>;
   using IndexLimits = typename std::numeric_limits<Index>;
 
+#ifdef LBFGSB_USE_TIMEOUT
   using Clock = std::chrono::high_resolution_clock;
   using Time = Clock::time_point;
   using Duration = std::chrono::duration<Scalar>;
+#endif
 
   class Function;
   struct State;
@@ -386,11 +390,10 @@ namespace optimize
   inline Scalar infinityNorm(const Eigen::MatrixBase<Derived>& x)
   { return x.template lpNorm<Eigen::Infinity>(); }
 
+#ifdef LBFGSB_USE_TIMEOUT
   inline Scalar durationMsec(const Time& start, const Time& end)
   { return std::chrono::duration_cast<Duration>(end - start).count() * 1000.0; }
-
-  inline Scalar timeToMsec(const Time& time)
-  { return std::chrono::duration_cast<std::chrono::milliseconds>(time.time_since_epoch()).count(); }
+#endif
 
 } // namespace optimize
 

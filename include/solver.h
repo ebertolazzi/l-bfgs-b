@@ -23,34 +23,15 @@ namespace optimize
 
   public:
     // Constructors and destructors
-    explicit Solver(const Scalar accuracy = 0.7,              // Accuracy level 0 to 1, where 1 is maximum accuracy
-                    const Scalar duration_max = 0.0,          // Maxmimum duration (milliseconds) (0 = unlimited)
-                    const Index f_evals_max = 0,              // Maxmimum number of function evaluations (0 = unlimited)
-                    const Callback& callback = [](Solver*) {} // Callback function which is executed after each optimization step
-                   ) :
+    explicit Solver(const Callback& callback = [](Solver*) {}) :
       n(0),
       l(Vector::Zero(n)),
       u(Vector::Zero(n)),
       curr_state(),
       prev_state(),
-      end_time(),
-      start_time(),
       stop_state(),
       callback(callback)
-    {
-      setStopState(accuracy,
-                   duration_max,
-                   f_evals_max
-                  );
-    }
-
-    explicit Solver(Callback& callback) :
-      Solver(0.7,       // accuracy
-             0.0,       // duration_max
-             0,         // f_evals_max
-             callback   // callback
-            )
-    {}
+    { setAccuracy(default_accuracy); }
 
     virtual ~Solver() = default;
 
@@ -64,7 +45,9 @@ namespace optimize
                     const Vector& u = Vector()
                    )
     {
+#ifdef LBFGSB_USE_TIMEOUT
       start_time = Clock::now();  // Reset the start time
+#endif
       n = iterate.x.size();       // Save the size of the parameter vector x
 
       // Form constraints as unbounded if not specified
@@ -138,7 +121,9 @@ namespace optimize
     const State& minimize(Function& f)
     {
       curr_state.stopped() = false; // Reset the stopped flag to allow the solver to run
+#ifdef LBFGSB_USE_TIMEOUT
       start_time = Clock::now();    // Reset the start time
+#endif
 
       // Compute a new state until the solver is done or stopped by the user
       while (!done() && !stopped()) {
@@ -154,17 +139,6 @@ namespace optimize
     // The solver may be resumed at this state by subsequently calling run().
     void stop()
     { curr_state.stopped() = true; }
-
-    // Sets all solver stopping criteria: accuracy, duration, and number of function evaluations
-    void setStopState(const Scalar accuracy,
-                      const Scalar duration,
-                      const Scalar f_evals
-                     )
-    {
-      setAccuracy(accuracy);
-      setDurationMax(duration);
-      setFunctionEvalsMax(f_evals);
-    }
 
     // Sets the solver convergence criteria based on the desired level of accuracy.
     // Accuracy level ranges from 0 to 1, where 1 is maximum accuracy possible based on the machine epsilon of the
@@ -182,14 +156,15 @@ namespace optimize
       stop_state.gNorm() = std::pow(10, accuracy*log10(std::sqrt(ScalarLimits::epsilon())));
     }
 
-    // Sets the maxmimum duration (in millseconds) the solver will run for during each computation (0 = unlimited)
-    // before stopping and returning the current state
-    void setDurationMax(const Scalar duration)
-    { stop_state.duration() = duration; }
+    // Sets the maximum number of function evaluations before the solver stops (0 = unlimited).
+    void setMaxFunctionEval(const Index f_evals_max)
+    { stop_state.fEvals() = f_evals_max; }
 
-    // Sets the maxmimum number of function evaluations before the solver will stop and return the current state
-    void setFunctionEvalsMax(const Scalar f_evals)
-    { stop_state.fEvals() = f_evals; }
+#ifdef LBFGSB_USE_TIMEOUT
+    // Sets the maximum execution time in milliseconds (0 = unlimited).
+    void setTimeout(const Scalar ms)
+    { stop_state.duration() = ms; }
+#endif
 
     // Sets the callback function
     void setCallback(const Callback& callback)
@@ -249,10 +224,12 @@ namespace optimize
       }
       curr_state.gNorm() = infinityNorm(projectedGradient(curr_state.x(), curr_state.g(), l, u));
 
-      // Update duration
+      // Update duration only when timeout support is enabled.
+#ifdef LBFGSB_USE_TIMEOUT
       end_time = Clock::now();
       curr_state.duration() += durationMsec(start_time, end_time);
       start_time = end_time;
+#endif
 
       // Copy function data
       curr_state.function = f.state();
@@ -261,7 +238,11 @@ namespace optimize
       const bool df_min_success = (curr_state.dfNorm() <= stop_state.dfNorm() && !curr_state.stalled());
       const bool dx_min_success = (curr_state.dxNorm() <= stop_state.dxNorm() && !curr_state.stalled());
       const bool g_min_success = (curr_state.gNorm() <= stop_state.gNorm());
+#ifdef LBFGSB_USE_TIMEOUT
       const bool duration_exceeded = (curr_state.duration() >= stop_state.duration() && stop_state.duration() > 0.0);
+#else
+      constexpr bool duration_exceeded = false;
+#endif
       const bool f_evals_exceeded = (curr_state.fEvals() >= stop_state.fEvals() && stop_state.fEvals() > 0);
 
       // Update solver statuses
@@ -281,13 +262,17 @@ namespace optimize
     }
 
   protected:
+    static constexpr Scalar default_accuracy = 0.7;
+
     Index n;              // Size of x
     Vector l;             // Lower bounds for x
     Vector u;             // Upper bounds for x
     State curr_state;     // Current state
     State prev_state;     // Previous state
+#ifdef LBFGSB_USE_TIMEOUT
     Time end_time;        // Current time point
     Time start_time;      // Previous time point
+#endif
     StopState stop_state; // Stopping state
     Callback callback;    // Optional user-defined callback function
   };
@@ -313,9 +298,13 @@ namespace optimize
       }
     }
     else {
+#ifdef LBFGSB_USE_TIMEOUT
       const bool duration_exceeeded = (   curr_state.duration() >= stop_state.duration()
                                        && stop_state.duration() > 0.0
                                       );
+#else
+      constexpr bool duration_exceeeded = false;
+#endif
       const bool f_evals_exceeded = (   curr_state.fEvals() >= stop_state.fEvals()
                                      && stop_state.fEvals() > 0
                                     );

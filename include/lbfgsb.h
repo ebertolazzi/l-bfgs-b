@@ -75,53 +75,9 @@ namespace optimize
 
   public:
     // Constructors and destructors
-    explicit Lbfgsb(const Scalar accuracy = 0.7,              // Accuracy level 0 to 1, where 1 is maximum accuracy
-                    const Scalar duration_max = 0.0,          // Maxmimum duration (milliseconds) (0 = unlimited)
-                    const Index f_evals_max = 0,              // Maxmimum number of function evaluations (0 = unlimited)
-                    const Callback& callback = [](Solver*) {} // Callback function which is executed after each optimization step
-                   ) :
-      Solver(accuracy,      // accuracy
-             duration_max,  // duration_max
-             f_evals_max,   // f_evals_max
-             callback       // callback
-            ),
-      m_max(5),
-
-      line_search(),
-
-      m(0),
-      th(1.0),
-      th_inv(1.0),
-
-      I(),
-      S(),
-      Y(),
-      SS(),
-      SY(),
-      YY(),
-
-      D(),
-      R_inv(),
-
-      W(),
-      Wb(),
-
-      M(),
-      Mb(),
-
-      c(),
-
-      free_set(),
-      active_set()
+    explicit Lbfgsb(const Callback& callback = [](Solver*) {}) :
+      Solver(callback)
     {}
-
-  explicit Lbfgsb(const Callback& callback) :
-    Lbfgsb(0.7,       // accuracy
-           0.0,       // duration_max
-           0,         // f_evals_max
-           callback   // callback
-          )
-  {}
 
   private:
     // Resets the algorithm's internal data
@@ -525,35 +481,35 @@ namespace optimize
     }
 
   private:
-    const Index m_max;      // Maximum number of correction pairs {s, y} to store in the limited memory matrices
+    const Index m_max = 5;  // Maximum number of correction pairs {s, y} to store in the limited memory matrices
 
-    LineSearch line_search; // Line search method
+    LineSearch line_search{}; // Line search method
 
-    Index m;         // Current number of correction pairs {s, y} stored in the limited memory matrices
-    Scalar th;       // Theta scaling parameter
-    Scalar th_inv;   // 1/Theta scaling parameter
+    Index m = 0;         // Current number of correction pairs {s, y} stored in the limited memory matrices
+    Scalar th = 1.0;     // Theta scaling parameter
+    Scalar th_inv = 1.0; // 1/Theta scaling parameter
 
-    Matrix I;        // Identity Matrix (n x n)
-    Matrix S;        // Matrix S where each element is the correction pair xk+1 - xk (n x m)
-    Matrix Y;        // Matrix Y where each element is the correction pair gk+1 - gk (n x m)
-    Matrix SS;       // Matrix S^T*S (m x m)
-    Matrix SY;       // Matrix S^T*Y (m x m)
-    Matrix YY;       // Matrix Y^T*Y (m x m)
+    Matrix I{};        // Identity Matrix (n x n)
+    Matrix S{};        // Matrix S where each element is the correction pair xk+1 - xk (n x m)
+    Matrix Y{};        // Matrix Y where each element is the correction pair gk+1 - gk (n x m)
+    Matrix SS{};       // Matrix S^T*S (m x m)
+    Matrix SY{};       // Matrix S^T*Y (m x m)
+    Matrix YY{};       // Matrix Y^T*Y (m x m)
 
-    Matrix D;        // Diagonal matrix of S^T*Y (m x m)
-    Matrix R_inv;    // Inverse of the upper triangular matrix of S^T*Y (m x m)
+    Matrix D{};        // Diagonal matrix of S^T*Y (m x m)
+    Matrix R_inv{};    // Inverse of the upper triangular matrix of S^T*Y (m x m)
 
-    Matrix W;        // Matrix W from the L-BFGS-B paper (n x 2m)
-    Matrix Wb;       // Matrix Wb from the L-BFGS-B paper (n x 2m)
+    Matrix W{};        // Matrix W from the L-BFGS-B paper (n x 2m)
+    Matrix Wb{};       // Matrix Wb from the L-BFGS-B paper (n x 2m)
 
-    Matrix M;        // Matrix M from the L-BFGS-B paper (2m x 2m)
-    Matrix Mb;       // Matrix Mb from the L-BFGS-B paper (2m x 2m)
+    Matrix M{};        // Matrix M from the L-BFGS-B paper (2m x 2m)
+    Matrix Mb{};       // Matrix Mb from the L-BFGS-B paper (2m x 2m)
 
-    Vector c;        // Vector which represents a component needed to compute the reduced gradient of free
+    Vector c{};        // Vector which represents a component needed to compute the reduced gradient of free
                      // variables at the Cauchy point (2m x 1)
 
-    IndexSet free_set;      // Set of free (unconstrained) indexes (tf x 1)
-    IndexSet active_set;    // Set of active (constrained) indexes (ta x 1)
+    IndexSet free_set{};    // Set of free (unconstrained) indexes (tf x 1)
+    IndexSet active_set{};  // Set of active (constrained) indexes (ta x 1)
   };
 
 } // namespace optimize
