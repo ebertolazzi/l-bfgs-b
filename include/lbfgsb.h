@@ -4,6 +4,7 @@
 #ifndef LBFGSB_H
 #define LBFGSB_H
 
+#include <cassert>          // assert
 #include <iostream>         // cout, endl, ostream
 #include <vector>           // vector
 
@@ -24,22 +25,22 @@ namespace optimize
       t(t)
     {}
 
-    bool operator==(const Breakpoint& rhs)
+    bool operator==(const Breakpoint& rhs) const
     { return this->t == rhs.t; }
 
-    bool operator!=(const Breakpoint& rhs)
+    bool operator!=(const Breakpoint& rhs) const
     { return this->t != rhs.t; }
 
-    bool operator<=(const Breakpoint& rhs)
+    bool operator<=(const Breakpoint& rhs) const
     { return this->t <= rhs.t; }
 
-    bool operator<(const Breakpoint& rhs)
+    bool operator<(const Breakpoint& rhs) const
     { return this->t < rhs.t; }
 
-    bool operator>=(const Breakpoint& rhs)
+    bool operator>=(const Breakpoint& rhs) const
     { return this->t >= rhs.t; }
 
-    bool operator>(const Breakpoint& rhs)
+    bool operator>(const Breakpoint& rhs) const
     { return this->t > rhs.t; }
 
     Index i;  // Index of the variable in x
@@ -275,7 +276,7 @@ namespace optimize
           c += dt*p;
 
           // Calculate f' and f'' for determining the location of the minimum
-          w = W(b, Eigen::all).transpose();
+          w = W(b, Eigen::indexing::all).transpose();
           fp += dt*fpp + g(b)*g(b) + th*g(b)*zb - g(b)*w.transpose()*M*c;
           fpp += -th*g(b)*g(b) - 2*g(b)*w.transpose()*M*p - g(b)*g(b)*w.transpose()*M*w;
           dt_min = (fpp == 0) ? ScalarLimits::max() : -fp/fpp;

@@ -1,31 +1,58 @@
 cmake_minimum_required(VERSION 3.16)
 
-# Define project name
-project(lbfgsb_example)
+project(lbfgsb_example LANGUAGES CXX)
 
-# Find dependencies
-find_package(Eigen3 3.4 REQUIRED)
+include(FetchContent)
 
-# Set C++ flags for each build type
-set(CMAKE_CXX_FLAGS_DEBUG "-Wall -Wextra -Wpedantic -O1 -g")
-set(CMAKE_CXX_FLAGS_MINSIZEREL "-Wall -Wextra -Wpedantic -Os -DNDEBUG")
-set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-Wall -Wextra -Wpedantic -march=native -O2 -g -DNDEBUG")
-set(CMAKE_CXX_FLAGS_RELEASE "-Wall -Wextra -Wpedantic -march=native -O3 -DNDEBUG")
+# Eigen 5.0.1 is provided exclusively through FetchContent.
+set(EIGEN_BUILD_DOC OFF CACHE BOOL "" FORCE)
+set(EIGEN_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+set(EIGEN_BUILD_PKGCONFIG OFF CACHE BOOL "" FORCE)
 
-# Set the build type
-set(CMAKE_BUILD_TYPE "Release")
-
-# Require at least C++11
-set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-# Point to main include directory and example include directory
-include_directories(
-  ${PROJECT_SOURCE_DIR}/../include
-  ${PROJECT_SOURCE_DIR}/include
+FetchContent_Declare(
+  eigen
+  URL https://gitlab.com/libeigen/eigen/-/archive/5.0.1/eigen-5.0.1.tar.gz
+  DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+  # Eigen is header-only; do not configure its legacy CMake project.
+  SOURCE_SUBDIR _lbfgsb_header_only
 )
+FetchContent_MakeAvailable(eigen)
 
-# Add example executables
-add_executable(${PROJECT_NAME}_constrained src/example_constrained.cpp)
+add_library(Eigen3::Eigen INTERFACE IMPORTED)
+target_include_directories(Eigen3::Eigen INTERFACE "${eigen_SOURCE_DIR}")
+
+# Build the examples with C++17.
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
+add_executable(${PROJECT_NAME}_constrained   src/example_constrained.cpp)
 add_executable(${PROJECT_NAME}_unconstrained src/example_unconstrained.cpp)
-add_executable(${PROJECT_NAME}_callback src/example_callback.cpp)
+add_executable(${PROJECT_NAME}_callback      src/example_callback.cpp)
+
+foreach(_lbfgsb_target IN ITEMS
+  ${PROJECT_NAME}_constrained
+  ${PROJECT_NAME}_unconstrained
+  ${PROJECT_NAME}_callback
+)
+  target_compile_options(${_lbfgsb_target} PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+    $<$<CONFIG:Debug>:-O1;-g>
+    $<$<CONFIG:MinSizeRel>:-Os>
+    $<$<CONFIG:RelWithDebInfo>:-O2;-g;-march=native>
+    $<$<CONFIG:Release>:-O3;-march=native>
+  )
+
+  target_include_directories(${_lbfgsb_target} PRIVATE
+    ${PROJECT_SOURCE_DIR}/../include
+    ${PROJECT_SOURCE_DIR}/include
+  )
+
+  target_link_libraries(${_lbfgsb_target} PRIVATE Eigen3::Eigen)
+endforeach()

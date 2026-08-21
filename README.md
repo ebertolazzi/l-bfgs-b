@@ -47,9 +47,9 @@ Core features of this library:
 
 ## Requirements
 
-The minimum requirements to use L-BFGS-B are a C++11 compiler and [Eigen >= 3.4](https://eigen.tuxfamily.org) (which is also a header-only library).
+The minimum requirements to use L-BFGS-B are a C++17 compiler and [Eigen >= 5.0.1](https://eigen.tuxfamily.org) (which is also a header-only library).
 
-If you also want to build the [examples](https://github.com/droemer7/l-bfgs-b/tree/master/examples/src) or [unit tests](https://github.com/droemer7/l-bfgs-b/tree/master/test/src), you will need [CMake >= 3.16](https://cmake.org/). The unit tests also require a C++14 compiler and an internet connection so CMake can automatically download and link against GoogleTest to run the tests. See the section [Build Instructions](README.md#build-instructions) for more.
+If you also want to build the [examples](https://github.com/droemer7/l-bfgs-b/tree/master/examples/src) or [unit tests](https://github.com/droemer7/l-bfgs-b/tree/master/test/src), you will need [CMake >= 3.16](https://cmake.org/) and an internet connection so CMake can automatically download the dependencies. See the section [Build Instructions](README.md#build-instructions) for more.
 
 ## Examples
 

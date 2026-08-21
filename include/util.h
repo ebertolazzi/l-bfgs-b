@@ -14,8 +14,8 @@
 namespace optimize
 {
   using Scalar = double;
-  using Eigen::all;
-  using Eigen::last;
+  using Eigen::indexing::all;
+  using Eigen::indexing::last;
   using Index = Eigen::Index;
   using Vector = Eigen::VectorXd;
   using Matrix = Eigen::MatrixXd;
@@ -23,7 +23,7 @@ namespace optimize
   using IndexLimits = typename std::numeric_limits<Index>;
 
   using Clock = std::chrono::high_resolution_clock;
-  using Time = std::chrono::_V2::system_clock::time_point;
+  using Time = Clock::time_point;
   using Duration = std::chrono::duration<Scalar>;
 
   class Function;
